@@ -1,0 +1,31 @@
+#MIS 64060: Assignment 1
+##by Eyob Tadele
+
+###**Source:** Original data was taken from dslabs package, and the murders dataset
+###murders dataset has been converted to .csv file
+
+
+**Q2 Q3: Importing a .csv dataset into r, printout statistics about the data, and the first 6 rows of data**
+
+```{r}
+murdersdata <- read.csv("murders.csv")
+str(murdersdata)
+summary(murdersdata)
+head(murdersdata)
+```
+
+**Q4: Adding a new calculated column, rate, from population and total variables**
+```{r}
+murdersdata$murder_rate <- (murdersdata[,5] / murdersdata[,4])*100
+murdersdata
+```
+**Q5: Plotting a murders by population(both quantitative variables) **
+```{r}
+plot(murdersdata$total,murdersdata$population, xlab="murders", ylab="population")
+```
+**Q5: Plotting a histogram of the murder_rate's frequency table**
+```{r}
+hist(murdersdata$murder_rate, main = "Histogram of states' murder rate occurances", xlab = "Murder Rate")
+```
+
+##END OF DOCUMENT
