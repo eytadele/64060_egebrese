@@ -1,0 +1,187 @@
+---
+title: 'MIS 64060: Assignment_2: k-NN for classification '
+author: "Eyob Tadele"
+date: "10/02/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+### Project Objective
+
+The objective of this assignment is to use k-NN to predict whether a new bank customer will accept a loan offer. This in turn will be used as the basis for designing a new marketing campaign that targets customers.
+
+The file UniversalBank.csv contains data on 5000 customers. The data include customer demographic information (age, income, etc.), the customer’s relationship with the bank (mortgage, securities account, etc.), and the customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign.
+### Importing a UniversalBank.csv dataset into r, load relevant libraries, and printout stats about the data.
+```{r}
+library(caret)
+library(dplyr)
+library(class)
+library(gmodels)
+custData <- read.csv("UniversalBank.csv")
+summary(custData)
+str(custData)
+```
+### Transforming categorical predictors with more than two categories into dummy variables.
+```{r}
+# applied as.character function on Education column to facilitate the transformation
+custData$Education <- as.character(custData$Education)
+# use the dummyVars function to create a transformation model
+dummy.custModel <- dummyVars("~ .", data = custData)
+# apply the model to the custData
+cust_Data <- data.frame(predict(dummy.custModel, custData))
+```
+### Changing Personal.Loan variable to factor as it is our target varaible
+```{r}
+cust_Data$Personal.Loan <- as.factor(cust_Data$Personal.Loan)
+#levels(cust_Data$Personal.Loan) = make.names(levels(factor(cust_Data$Personal.Loan)))
+str(cust_Data)
+```
+### Partition the data into training (60%) and validation (40%) sets. Then create a normalized model using the training set and apply that to both training and validation datasets.
+```{r}
+set.seed(420)
+# partitioning cust_Data into training(60%) and validation(40%) by first creating the model
+Train_idx <- createDataPartition(cust_Data$Personal.Loan, p=0.6, list = FALSE)
+
+# creating the training and validation datasets by applying the model
+Train_custData <- cust_Data[Train_idx,]
+Valid_custData <- cust_Data[-Train_idx,]
+
+# make specific selection of the training set indices based on the question(i.e. dropping columns 1,5,and 12)
+TrainData <- Train_custData[,-c(1,5,12)]
+ValidData <- Valid_custData[,-c(1,5,12)]
+
+# creating a normalized model using range on the training data
+Model_Train_Norm <- preProcess(TrainData, method = c("range"))
+
+# apply normalization model on training and validation set
+TrainPredictors <- predict(Model_Train_Norm, TrainData)
+ValidPredictors <- predict(Model_Train_Norm, ValidData)
+summary(TrainPredictors)
+summary(ValidPredictors)
+
+# the training and validation labels are on index 12 i.e. Personal.Loan
+TrainLabels <- Train_custData[,12]
+ValidLabels <- Valid_custData[,12]
+summary(TrainLabels)
+summary(ValidLabels)
+```
+
+### Q1: Determine how a specific customer(i.e. Age = 40, Experience = 10, Income = 84, Family = 2,  CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1, and Credit Card = 1) will be classified. This means that it is out test set.
+```{r}
+set.seed(420)
+# Create a dataframe for the test set
+TestData <- data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, 
+                       Education1 = 0, Education2 = 1, Education3 = 0, Mortgage = 0,  
+                       Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1)
+
+# normalize the test data with the normalization model created earler
+TestPredictor <- predict(Model_Train_Norm, TestData)
+# train a KNN model using k=1 and the class package
+PredLabel <- knn(TrainPredictors, TestPredictor, cl=TrainLabels, k=1)
+# The customer will be classified as a 0
+PredLabel
+
+```
+**The customer will be classified as a 0. Meaning the customer will decline the offer.**
+
+### Q2: What is a choice of k that balances between overfitting and ignoring the predictor information? 
+I applied the expand.grid() function to search for a specific optimal value of k by supplying certain number of potential k values.
+```{r}
+# searching for a specific choice of k by customizing a grid search
+set.seed(420)
+# create a search_grid set containing potential k values
+search_grid <- expand.grid(k=c(3,5,7,9,11,13,15,17,19,21))
+# apply it to the knn model
+bestK_model <- train(TrainPredictors, TrainLabels, method = "knn", tuneGrid = search_grid)
+bestK_model
+```
+**We can observe from the output that accuracy starts to decline after k=3. This indicates that 3 is the optimum value of k.**
+
+### Q3: Show the confusion matrix for the validation data that results from using the best k
+```{r}
+set.seed(420)
+# train a KNN model using k=3 and the class package
+PredLabelBestK <- knn(TrainPredictors, ValidPredictors, cl=TrainLabels, k=3)
+head(PredLabelBestK)
+
+# confusion matrix for predicted values against validation data for best k (i.e. k=3) and positive case as 1
+confusionMatrix(PredLabelBestK, ValidLabels, positive = '1')
+```
+
+### Q4: Consider the following customer: Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities Account = 0, CD Account = 0, Online = 1 and Credit Card = 1. Classify the customer using the best k.
+* The best k here is 3 and using the already normalized TestPredictor from question 1
+```{r}
+set.seed(420)
+# train a KNN model using k=3 and the class package
+PredLabelK3t <- knn(TrainPredictors, TestPredictor, cl=TrainLabels, k=3)
+PredLabelK3t
+
+```
+**The customer will be classified as a 0, which means a declined offer.**
+
+### Q5: Repartition the data, this time into training, validation, and test sets (50% : 30% : 20%). Apply the k-NN method with the k chosen above. Compare the confusion matrix of the test set with that of the training and validation sets. Comment on the differences and their reason.
+In order to crate a 50-30-20 partition, I first partitioned the dataset as 80-20. Then the 80% training dataset is further divided into training and validation set with approximately 60-40 ratio.
+```{r}
+# partitioning cust_Data into training(60%) and validation(40%) by first creating the model
+set.seed(420)
+Train_idx2 <- createDataPartition(cust_Data$Personal.Loan, p=0.8, list = FALSE)
+
+# creating the training and test datasets(80-20)
+Train_custData2 <- cust_Data[Train_idx2,]  # this is both TRAINING and VALIDATION for now
+Test_custData2 <- cust_Data[-Train_idx2,]
+
+# partitioning the Train_custData(i.e. TRAINING + VALIDATION) into separate
+# training and validation datasets in 60-40 ratio
+Train_idx3 <- createDataPartition(Train_custData2$Personal.Loan, p=0.625, list = FALSE)
+Train_custData22 <- Train_custData2[Train_idx3,] # resizing the training data
+Valid_custData2 <- Train_custData2[-Train_idx3,] # creating the validation data
+
+# make specific selection of the training set indices based on the quesion
+# (i.e. dropping columns 1,5,and 12)
+TrainData2 <- Train_custData22[,-c(1,5,12)]
+ValidData2 <- Valid_custData2[,-c(1,5,12)]
+TestData2 <- Test_custData2[,-c(1,5,12)]
+
+# creating a normalized model using range on the training data
+Model_Train_N <- preProcess(TrainData2, method = c("range"))
+
+# apply normalization model on training and validation set
+TrainPredictors2 <- predict(Model_Train_N, TrainData2)
+ValidPredictors2 <- predict(Model_Train_N, ValidData2)
+TestPredictor2 <-  predict(Model_Train_N, TestData2)
+str(TrainPredictors2)
+str(ValidPredictors2)
+str(TestPredictor2)
+
+# the training and validation labels are on index 12 i.e. Personal.Loan
+TrainLabels2 <- Train_custData22[,12]
+ValidLabels2 <- Valid_custData2[,12]
+TestLabels2 <- Test_custData2[,12]
+
+```
+
+Building a KNN model with k=3 and applying it on the training and validation sets. Then based on the outcome, apply it to the training set and finally compare results with the use of confusion matrices.
+
+```{r}
+set.seed(420)
+# train a KNN model using k=3 for classification on the training set
+PredLabel2 <- knn(TrainPredictors2, ValidPredictors2, cl=TrainLabels2, k=3)
+head(PredLabel2)
+
+# confusion matrix for predicted values against validation data for best k (i.e. k=3)
+confusionMatrix(PredLabel2, ValidLabels2, positive = '1')
+
+# train a KNN model using k=3 for classification on the test set
+# I re-combined the training and validation sets to use on the training set here
+set.seed(420)
+Train_custDataTrValCombined <- predict(Model_Train_N,Train_custData2[,-c(1,5,12)])
+Train_custDataTrValCombinedLabel <- Train_custData2[,12]
+PredLabel2 <- knn(Train_custDataTrValCombined, TestPredictor2, cl=Train_custDataTrValCombinedLabel, k=3)
+head(PredLabel2)
+
+# confusion matrix for predicted values against test data for best k (i.e. k=3)
+confusionMatrix(PredLabel2, TestLabels2, positive = '1')
+
+```
+**It can be observed from the results of the two confusion matrices that the model in the test set has performed slightly better. Accuracy has improved from 0.9533 to 0.957. The improvement is the result of combining training and validation datasets(i.e. 80%), as the new training set. Meaning, the model has learned from a much larger data pool, as opposed to only 50% in the initial training with 30% validation set.**
