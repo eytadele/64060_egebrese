@@ -1,0 +1,122 @@
+---
+title: 'MIS 64060: Assignment_3: Naive Bayes for classification '
+author: "Eyob Tadele"
+date: "10/15/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+### Project Objective
+
+The purpose of this assignment is to use Naive Bayes for classification.
+
+The file UniversalBank.csv contains data on 5000 customers of Universal Bank. The data include
+customer demographic information (age, income, etc.), the customer’s relationship with the bank
+(mortgage, securities account, etc.), and the customer response to the last personal loan campaign
+(Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that
+was offered to them in the earlier campaign. In this exercise, we focus on two predictors: Online
+(whether or not the customer is an active user of online banking services) and Credit Card
+(abbreviated CC below) (does the customer hold a credit card issued by the bank), and the outcome
+Personal Loan (abbreviated Loan below).
+
+### Importing a UniversalBank.csv dataset into r, load relevant libraries, and printout stats about the data.
+
+```{r}
+library(caret)
+library(e1071)
+
+univBank <- read.csv("UniversalBank.csv")
+str(univBank)
+head(univBank)
+```
+### Transforming the two predictors(Online,Credit Card) and the outcome(Personal.Loan) into factors.
+```{r}
+univBank$CreditCard <- factor(univBank$CreditCard)
+univBank$Online <- factor(univBank$Online)
+univBank$Personal.Loan <- factor(univBank$Personal.Loan)
+str(univBank)
+```
+### Partition the data into training (60%) and validation (40%) sets.
+```{r}
+selVars <- c(10,13,14)    # selecting Online, Credit Card, and Personal.Loan 
+set.seed(420)
+univBank.part.mod <- createDataPartition(univBank$Personal.Loan,p=0.6, list = FALSE)
+univBank.tr <- univBank[univBank.part.mod,selVars]
+univBank.va <- univBank[-univBank.part.mod,selVars]
+summary(univBank.tr)
+summary(univBank.va)
+
+```
+
+### Part A: Create a pivot table for the training data with Online as a column variable, CC as a row variable, and Loan as a secondary row variable.
+```{r}
+# creating a pibot table using the ftable() function
+attach(univBank.tr)
+ftable(Online,CreditCard,Personal.Loan)
+detach(univBank.tr)
+```
+
+### Part B: Looking at the pivot table, calculate the probability of loan offer acceptance for a customer who owns a bank credit card and is an active online banking services user. 
+This is the probability of loan acceptance (Loan = 1) conditional on
+having a bank credit card (CC = 1) and being an active user of online banking services (Online = 1). 
+
+P(L=1 | C=1,O=1) = 52/528 = 0.0984
+
+### Part C: Create two separate pivot tables for the training data. One will have Loan (rows) as a function of Online (columns) and the other will have Loan (rows) as a function of CC.
+
+```{r}
+attach(univBank.tr)
+ftable(Online,Personal.Loan)
+ftable(CreditCard,Personal.Loan)
+detach(univBank.tr)
+```
+
+### Part D: Compute the conditional probabilities of: 
+
+### i. P(CC = 1 | Loan = 1) (the proportion of credit card holders among the loan acceptors)
+    P(CC = 1 | Loan = 1) = 91/288 =  0.3159
+  
+### ii. P(Online = 1 | Loan = 1)
+    P(Online = 1 | Loan = 1) = 177/288 = 0.6145
+  
+### iii. P(Loan = 1) (the proportion of loan acceptors)
+  P(Loan = 1) = 288/3000 = 0.096
+  
+### iv. P(CC = 1 | Loan = 0)
+  P(CC = 1 | Loan = 0) = 799/2712 = 0.2946
+
+### v. P(Online = 1 | Loan = 0)
+  P(Online = 1 | Loan = 0) = 1606/2712 = 0.5921
+
+### vi. P(Loan = 0)
+  P(Loan = 0) = 2712/3000 = 0.904
+  
+### Part E: Use the quantities computed above to compute the naive Bayes probability P(Loan = 1 | CC = 1, Online = 1).
+P(L=1|CC=1,O=1) = P(CC=1|L=1) * P(O=1|L=1) * P(L=1) / 
+                  P(CC=1|L=1) * P(O=1|L=1) * P(L=1) + P(CC=1|L=0) * P(O=1|L=0) * P(L=0) 
+                = (91/288)(177/288)(288/3000) / ((91/288)(177/288)(288/3000) + (799/2712)(1606/2712)(2712/3000))
+
+P(L=1|CC=1,O=1) = 0.1057
+
+### Part F: Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate?
+The value obtained through naive Bayes method is 0.1057, and 0.0984 using direct method. Naive Bayes makes 
+an assumption that all the features are independent of eachother and that may not be the case in real lifecycle. 
+Making that assumption may make that a little less accurate.
+
+### Part G: Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)?
+The entries needed are: P(CC=1|L=1), P(O=1|L=1), P(L=1), P(CC=1|L=0), P(O=1|L=0), P(L=0)
+
+### Part G: Run naive Bayes on the data. Examine the model output on training data, and find the entry that corresponds to P(Loan = 1 | CC = 1, Online = 1). Compare this to the number you obtained in (E). 
+
+```{r}
+univBank.nb <- naiveBayes(Personal.Loan ~ ., data = univBank.tr)  # using the naiveBayes model
+univBank.nb
+```
+
+**Calculating values from the naiveBayes model probability tables results in a value of 0.1057 : **
+  **(0.3159722)(0.6145833)(0.096) / ((0.3159722)(0.6145833)(0.096)+(0.2946165)(0.5921829)(0.904)) = 0.1057**
+
+**This is the same as the value obtained in E.** 
+  
+  
