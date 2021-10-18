@@ -101,7 +101,7 @@ P(L=1|CC=1,O=1) = 0.1057
 
 ### Part F: Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate?
 The value obtained through naive Bayes method is 0.1057, and 0.0984 using direct method. Naive Bayes makes 
-an assumption that all the features are independent of eachother and that may not be the case in real lifecycle. 
+an assumption that all the features are independent of each other and that may not be the case in real life. 
 Making that assumption may make that less accurate.
 
 ### Part G: Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)?
