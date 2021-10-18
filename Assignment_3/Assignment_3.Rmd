@@ -53,7 +53,7 @@ summary(univBank.va)
 ```{r}
 # creating a pibot table using the ftable() function
 attach(univBank.tr)
-ftable(Online,CreditCard,Personal.Loan)
+ftable(Personal.Loan,CreditCard,Online)
 detach(univBank.tr)
 ```
 
@@ -61,7 +61,7 @@ detach(univBank.tr)
 This is the probability of loan acceptance (Loan = 1) conditional on
 having a bank credit card (CC = 1) and being an active user of online banking services (Online = 1). 
 
-P(L=1 | C=1,O=1) = 52/528 = 0.0984
+P(L=1 | C=1,O=1) = 52/(52+476) = 0.0984
 
 ### Part C: Create two separate pivot tables for the training data. One will have Loan (rows) as a function of Online (columns) and the other will have Loan (rows) as a function of CC.
 
@@ -102,7 +102,7 @@ P(L=1|CC=1,O=1) = 0.1057
 ### Part F: Compare this value with the one obtained from the pivot table in (B). Which is a more accurate estimate?
 The value obtained through naive Bayes method is 0.1057, and 0.0984 using direct method. Naive Bayes makes 
 an assumption that all the features are independent of eachother and that may not be the case in real lifecycle. 
-Making that assumption may make that a little less accurate.
+Making that assumption may make that less accurate.
 
 ### Part G: Which of the entries in this table are needed for computing P(Loan = 1 | CC = 1, Online = 1)?
 The entries needed are: P(CC=1|L=1), P(O=1|L=1), P(L=1), P(CC=1|L=0), P(O=1|L=0), P(L=0)
