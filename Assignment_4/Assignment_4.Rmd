@@ -1,0 +1,102 @@
+---
+title: 'MIS 64060: Assignment_4: k-Means for clustering '
+author: "Eyob Tadele"
+date: "10/26/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+### Project Objective
+
+The purpose of this assignment is to use k-Means for clustering and analyse the pharmaceuticals dataset.
+&nbsp;
+An equities analyst is studying the pharmaceutical industry and would like your help in exploring and understanding the financial data collected by her firm. Her main objective is to understand the structure of the pharmaceutical industry using some basic financial measures. Financial data gathered on 21 firms in the pharmaceutical industry are available in the file Pharmaceuticals.csv. Use cluster analysis to explore and analyze the given dataset. 
+
+### (a) Use only the numerical variables (1 to 9) to cluster the 21 firms. Justify the various choices made in conducting the cluster analysis, such as weights for different variables, the specific clustering algorithm(s) used, the number of clusters formed, and so on.
+&nbsp;
+Importing a Pharmaceuticals.csv dataset into r, load relevant libraries, and printout stats about the data.
+```{r warning=FALSE, error=FALSE, message=FALSE}
+library(tidyverse)
+library(factoextra)
+library(flexclust)
+library(cluster)
+library(gridExtra)
+set.seed(420)
+pharmaData <- read.csv("Pharmaceuticals.csv")
+rownames(pharmaData) <- pharmaData$Symbol  # setting the row names to company acronyms
+pharma_df <- pharmaData[,-c(1,2,12,13,14)] # Selecting only the numerical variables of the dataset
+ph_df <- scale(pharma_df)   # Scaling the dataset using z-score
+summary(ph_df)
+```
+Computing and visualizing the distance matrix using the functions get_dist() and fviz_dist() from the factoextra R package. This enables us to have visual understanding of the dis/similarity of the different data points.
+```{r}
+set.seed(420)
+distance <- get_dist(ph_df)
+# displaying a dissimilarity and distance matrix
+fviz_dist(distance, gradient = list(low = "dark green", mid = "white", high = "red"))
+head(round(as.matrix(distance), 2),4) #displaying the first four rows rounded to 2 decimal places
+```
+As distance is an important factor in clustering, the distance matrix above shows the similarity or dissimilarity of each pair of observations based on thier distance (i.e. Green indicating similarity and red showing dissimilarity, in this specific example). The similarity can be used to decide which clusters should be combined or divided into another. Meaning, points with minimal distance value among them should be be in the same cluster. \
+Since it's required to have a K value in order to use the k-means algorithm, we can manually try different values of K to see how the dataset gets clustered. I've randomly selected k values of 2,3,4,5 and a restart value of 25(which is the default). 
+```{r}
+set.seed(420)
+k2 <- kmeans(ph_df, centers = 2, nstart = 25) # k = 2, number of restarts = 25
+k3 <- kmeans(ph_df, centers = 3, nstart = 25) # k = 3, number of restarts = 25
+k4 <- kmeans(ph_df, centers = 4, nstart = 25) # k = 4, number of restarts = 25
+k5 <- kmeans(ph_df, centers = 5, nstart = 25) # k = 5, number of restarts = 25
+
+k2$size # Number of Pharmaceutical companies in each cluster, k=2
+k3$size # Number of Pharmaceutical companies in each cluster, k=3
+k4$size # Number of Pharmaceutical companies in each cluster, k=4
+k5$size # Number of Pharmaceutical companies in each cluster, k=5
+
+# assigning the visual outputs to objects that can be displayed in grid.arrange function
+kv2 <- fviz_cluster(k2, data = ph_df, pointsize = 1, labelsize = 7) + ggtitle("k=2")
+kv3 <- fviz_cluster(k3, data = ph_df, pointsize = 1, labelsize = 7) + ggtitle("k=3")
+kv4 <- fviz_cluster(k4, data = ph_df, pointsize = 1, labelsize = 7) + ggtitle("k=4")
+kv5 <- fviz_cluster(k5, data = ph_df, pointsize = 1, labelsize = 7) + ggtitle("k=5")
+
+# arranging the clustering plots above into grids to make it easy for comparison and readability
+grid.arrange(kv2,kv3,kv4,kv5)
+```
+We can see from the above cluster visualizations that some clusters may include data points (i.e the pharmaceutical companies, in this case)that may not necessarily be similar in that cluster. In order to help in identifying the optimal number of clusters, we can apply three methods. Namely, Elbow method, Silhouette method, or Gap statistic. For this case, I've chosen to use the Silhouette method.
+```{r}
+set.seed(420)
+# applying the Silhouette method using the fviz_nbclust function
+fviz_nbclust(ph_df, kmeans, method = "silhouette")
+```
+It can be inferred from the above graph that the optimal value of k=5. As a result, we can use 5 as the optimal k to cluster and analyze the pharmaceuticals dataset. 
+```{r}
+set.seed(420)
+k5 <- kmeans(ph_df, centers = 5, nstart = 25)
+fviz_cluster(k5, data = ph_df, pointsize = 1, labelsize = 7)
+```
+If there is a need to reduce the dimension of the features or assign different weights to the features, we can observe the variance within each of the 21 dimensions. Those features/variables with higher variance can be assigned a higher weight. Alternatively, if the variance is very small, we can consider dropping those features with low variance. We can also apply Principal Component Analysis to reduce the dimension.
+&nbsp;
+
+### (b) Interpret the clusters with respect to the numerical variables used in forming the clusters.
+From the cluster mean values above, we can see that: \
+```{r}
+print(k5)
+```
+* Cluster 1 has a bigger Market Cap, ROE, ROA, Asset Turnover, and Net Profit Margin; also has a lesser Beta(vulnerability to systematic risk), PE Ratio(growth in the future), and Leverage. This might suggest a cluster of well established big pharma companies. 
+* The first thing that stands out in Cluster 2 is its higher PE_Ratio, suggesting the stock's price is high relative to the earnings and possibly overpriced. Also the Net Profit Margin  and ROE appears to be the lowest among the clusters.
+* Cluster 3 has the lowest Revenue Growth but a better current Net_Profit Margin. The Revenue Growth and PE Ratio are also lower suggesting bleak growth potential. 
+* Cluster 4 appears to have the highest Rev_Growth but relatively unremarkable in the other factors, including low Market Cap.
+* Cluster 5 has the highest Beta(i.e. vulnerable to market changes) and highest Leverage(making it bad, considering its Profit_Margin, ROA, and Rev_Growth are low). This cluster appears to be performing poorly across all the features.
+&nbsp;
+
+### (c) Is there a pattern in the clusters with respect to the numerical variables (10 to 12)? 
+* As far as variable 12 (Exchange) is concerned, almost 90% of the dataset belongs in NYSE and this doesn't help in identifying a pattern. 
+* The Median_Recommendations somewhat align to the Clusters, but not completely. Companies in Cluster 1 are recommended a Hold or Moderate Buy, as it's performing well in most categories. Cluster 2 are considered overpriced and buying is not ideal. However, one of the recommendations is for a Moderate Buy, which doesn't make sense here. Recommendations to 'Hold' for Cluster 5 only makes sense, if we don't want to get rid of it at a low price. Clusters 3 and 4 aren't clear as far as recommendations are concerned. It has a mix of Hold,Moderate Sell/Buy.
+* In terms of location, 67% are based in the US or Canada. The rest are in Europe. This also doesn't align clearly with the clusters.
+&nbsp;
+Generally, it looks like the non-selected variables(10-12) do not appear to show a clear pattern in the clusters. Feature 10(Median_Recommendation) slightly follows a pattern with the clusters, but only to a limited degree.
+
+### (d) Provide an appropriate name for each cluster using any or all of the variables in the dataset.
+* Cluster 1: 'Big Pharma', with high market cap, ROE, ROA, Asset Turnover, and NPM.
+* Cluster 2: 'Overpriced Pharma', with high PE ratio.
+* Cluster 3: 'Currently Profitable Pharma' with good Net_Profit_Margin, but lowest Revenue Growth.
+* Cluster 4: 'Future Potential Pharma', with highest Rev_Growth.
+* Cluster 5: 'Poorly Performing Pharma', with low performance across all the features.
