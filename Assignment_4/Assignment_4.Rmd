@@ -88,6 +88,14 @@ print(k5)
 &nbsp;
 
 ### (c) Is there a pattern in the clusters with respect to the numerical variables (10 to 12)? 
+```{r}
+# incorporating the clusters with the non selected features and display the matrix
+temp <- pharmaData[,c(1,12,13,14)]
+temp2 <- as.data.frame(list(k5$cluster))
+temp$cluster <- temp2[,c(1)]
+temp %>% arrange(desc(temp$cluster))
+```
+
 * As far as variable 12 (Exchange) is concerned, almost 90% of the dataset belongs in NYSE and this doesn't help in identifying a pattern. 
 * The Median_Recommendations somewhat align to the Clusters, but not completely. Companies in Cluster 1 are recommended a Hold or Moderate Buy, as it's performing well in most categories. Cluster 2 are considered overpriced and buying is not ideal. However, one of the recommendations is for a Moderate Buy, which doesn't make sense here. Recommendations to 'Hold' for Cluster 5 only makes sense, if we don't want to get rid of it at a low price. Clusters 3 and 4 aren't clear as far as recommendations are concerned. It has a mix of Hold,Moderate Sell/Buy.
 * In terms of location, 67% are based in the US or Canada. The rest are in Europe. This also doesn't align clearly with the clusters.
