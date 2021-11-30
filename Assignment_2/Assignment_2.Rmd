@@ -3,8 +3,9 @@ title: 'MIS 64060: Assignment_2: k-NN for classification '
 author: "Eyob Tadele"
 date: "10/02/2021"
 output:
-  pdf_document: default
+  word_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ### Project Objective

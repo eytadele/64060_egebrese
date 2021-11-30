@@ -1,0 +1,172 @@
+---
+title: 'MIS 64060: Assignment_5: Hierarchical Clustering '
+author: "Eyob Tadele"
+date: "11/13/2021"
+output:
+  pdf_document: default
+  html_document: default
+spacing: single
+---
+
+### Project Objective 
+To use Hierarchical Clustering on the Cereals.csv dataset. This dataset includes nutritional information, store display, and consumer ratings for 77 breakfast cereals.    
+
+### Load relevant libraries, read data and preprocess by removing all cereals with missing values. 
+```{r warning=FALSE, error=FALSE, message=FALSE}
+library(tidyverse)
+library(factoextra)
+library(cluster)
+library(caret)
+library(dplyr)
+
+cereals.df <- read.csv("Cereals.csv")
+# setting the row names to the brand name
+rownames(cereals.df) <- cereals.df$name
+# removing all cereals with missing values
+cereals.df <- na.omit(cereals.df) 
+# de-selecting non-numeric variables before normalizing
+cereals.df <- cereals.df[,-c(1,2,3)]
+# Scaling the dataset using z-score
+cereal.df.norm <- scale(cereals.df)
+```
+
+### Question 1: Apply hierarchical clustering to the data using Euclidean distance to the normalized measurements. Use Agnes to compare the clustering from single linkage, complete linkage, average linkage, and Ward. Choose the best method.
+
+```{r fig.align='left'}
+set.seed(420)
+# computing distance based on the normalized data and the 13 variables selected
+dist.norm <- dist(cereal.df.norm, method = "euclidean")
+
+# single linkage: uses the minimum pairwise similarity between all observations
+hc_single <- hclust(dist.norm, method = "single")
+plot(hc_single, cex = 0.4, hang = -1, ann = FALSE)
+
+# complete linkage: uses the maximum pairwise similarity between all observations
+hc_comp <- hclust(dist.norm, method = "complete")
+plot(hc_comp, cex = 0.4, hang = -1, ann = FALSE)
+
+# average linkage: uses average pairwise similarity before merging
+hc_avg <- hclust(dist.norm, method = "average")
+plot(hc_avg, cex = 0.4, hang = -1, ann = FALSE)
+
+# ward: uses the Error Sum of Squares(SSE)
+hc_ward <- hclust(dist.norm, method = "ward.D")
+plot(hc_ward, cex = 0.4, hang = -1, ann = FALSE)
+
+# using Agnes function to choose the best method via the agglomerative coefficient values
+single.hc <- agnes(dist.norm, method = "single")
+comp.hc <- agnes(dist.norm, method = "complete")
+avg.hc <- agnes(dist.norm, method = "average")
+ward.hc <- agnes(dist.norm, method = "ward")
+#printing the Agglomerative coefficient values
+single.hc$ac
+comp.hc$ac
+avg.hc$ac
+ward.hc$ac
+```
+
+### We can see from the agglomerative coefficinet values above that the Ward method give is closest to 1. This indicates that the Ward method gives us the strongest clustering structure among the alternatives. \  
+
+### Question 2: How many clusters would you choose? \  
+### Looking at the dendrogram with Ward method, we can choose the number of clusters by first finding the largest vertical difference between the nodes and then drawing a horizontal line halfway through it. The number of vertical lines intersecting it will be the "optimal" number of clusters.
+```{r fig.align='left'}
+# re-plotting the dendrogram using ward method
+plot(hc_ward, cex = 0.4, hang = -1, ann = FALSE)
+# drawing a horizontal line from the halfway point of the longest difference
+abline(h=20, col = "blue")
+# visualizing the clusters inside the dendrogram by putting borders
+rect.hclust(hc_ward, k=5, border = 2:6)
+# cuts the tree into different clusters based on the height(i.e. 20 in this case)
+cereal.clusters <- cutree(hc_ward, h=20)
+# visualizing the clusters
+fviz_cluster(list(data=cereal.df.norm, cluster = cereal.clusters), pointsize = 1, labelsize = 7)
+```
+
+### We can observe from the result of the dendrogram that there are 5 clusters chosen. The clusters are also visualized using the fviz_cluster() function as seen above. \  
+
+```{r}
+# save the clusters as a list into a temp variable
+temp <- as.list(cutree(hc_ward, h=20))
+# convert temp into a dataframe and transpose it, so as to match rows in hc_ward 
+df <- t(as.data.frame(temp))
+df1 <- as.data.frame(df)
+# copying dataframe into a new one
+cereal.df.norm2 <- as.data.frame(cereal.df.norm)
+cereal.df.norm2$cluster <- df1[,c(1)]
+head(cereal.df.norm2)
+str(cereal.df.norm2)
+```
+### Question3: Comment on the structure of the clusters and on their stability. Hint: To check stability, partition the data and see how well clusters formed based on one part apply to the other part. To do this: \   
+* Cluster partition A 
+* Use the cluster centroids from A to assign each record in partition B (each record is assigned to the cluster with the closest centroid). 
+* Assess how consistent the cluster assignments are compared to the assignments based on all the data.
+```{r fig.align='left'}
+set.seed(420)
+# Creating a model for partitioning the cereals data into two parts
+Partition <- createDataPartition(cereal.df.norm2$cluster, p = 0.7, list = FALSE)
+part.a <- cereal.df.norm2[Partition,]
+part.b <- cereal.df.norm2[-Partition,]
+#Grouping dataset by clusters and computing the mean of the group columns gives us the centroid values
+cent.a <- aggregate(part.a[,1:13], list(part.a$cluster),mean)
+cent.a
+#create an empty dataframe and fill values with 0s to store information related to clusters in part.b
+clust.b <- as.data.frame(matrix(0,nrow(part.b),1))
+
+# The code below first combines the centroids from A with values from part.b and computes the distance. 
+# Then using which.min function, we can save the indices that represent the new clusters in clust.b
+for (x in 1:nrow(part.b)) {
+  clust.b$V1[x] <- which.min(as.matrix(get_dist(as.data.frame(rbind(cent.a[-1],part.b[x,-ncol(part.b)])))) [6,-6])
+}
+
+#Here we can compute the average similarity of the clusters by comparing part.b with the primary cluster to see a difference.
+clust.b$clust0 <- part.b$cluster
+mean(clust.b$V1 == clust.b$clust0)
+```
+### It can be observed from the result that there is a 95% similarity among the clusters, which points to the stability of the clusters. \  
+
+### An alternative approch to answering this question is to use the concept of Cophenetic Correlation value as a measure of similarity between the partitions A and B. \  
+
+*Note: Classifications are generally pictured in the form of hierarchical trees, also called a dendrogram. A dendrogram is the graphical representation of an ultrametric (= cophenetic) matrix; so dendrograms can be compared to one another by comparing their cophenetic matrices. (Reference: Sinan Saracli, Nurhan Dogan, Ismet Dogan: Comparison of hierarchical cluster analysis methods by cophenetic correlation. Journal of Inequalities and Applications volume 2013, Article number: 203 (2013)).* Sample code below attempts to implement it, but the resulting dendrograms aren't the same size(even though p=0.5). Thus preventing the calculation of Cophenetic correlation.
+```
+# Creating a model for partitioning the cereals data into two parts,
+Partition_idx <- createDataPartition(cereal.df.norm2$cluster, p = 0.5, list = FALSE)
+part.A <- cereal.df.norm2[Partition_idx,]
+part.B <- cereal.df.norm2[-Partition_idx,]
+# computing distance based on the normalized data and the 13 variables selected
+dist.a <- dist(part.A, method = "euclidean")
+dist.b <- dist(part.B, method = "euclidean")
+# Clustering using Ward method
+hc_ward_a <- hclust(dist.a, method = "ward.D")
+hc_ward_b <- hclust(dist.b, method = "ward.D")
+dend.a <- as.dendrogram(hc_ward_a)
+dend.b <- as.dendrogram(hc_ward_b)
+
+cor(cophenetic(dend.a), cophenetic(dend.b))
+```
+
+### Question 4: The elementary public schools would like to choose a set of cereals to include in their daily cafeterias. Every day a different cereal is offered, but all cereals should support a healthy diet. For this goal, you are requested to find a cluster of “healthy cereals.” Should the data be normalized? If not, how should they be used in the cluster analysis? \  
+
+### The assumption taken here regarding what constitutes as a "healthy cereal" would be its protein, fiber and vitamin content. However, the vitamin feature mostly consists of the value 25, skewing the data heavily to one side. As a result, I have selected the protein and fiber features to identify those that support a healthy diet for students. The data should be normalized, as the scale of some of the features may unduly influence our clusters. For example, the range of values for protein is [1-6] and [0-14] for fiber.
+```{r}
+# selecting features that are considered as healthy
+healthy.cereals <- cereals.df[,c(2,5)]
+# Scaling the dataset using z-score
+healthy.cereals.norm <- scale(healthy.cereals)
+
+set.seed(420)
+# computing distance based on the normalized data and the 2 variables selected
+dist.h <- dist(healthy.cereals.norm, method = "euclidean")
+hc_healthy <- hclust(dist.h, method = "ward.D")
+plot(hc_healthy, cex = 0.4, hang = -1, ann = FALSE)
+# drawing a horizontal line from the halfway point of the longest difference
+abline(h=20, col = "blue")
+# visualizing the clusters inside the dendrogram by putting borders
+rect.hclust(hc_healthy, k=2, border = 2:6)
+# cuts the tree into different clusters based on the height(i.e. 20 in this case)
+healthy.cereal.clusters <- cutree(hc_healthy, h=17)
+# visualizing the clusters
+fviz_cluster(list(data=healthy.cereals.norm, cluster = healthy.cereal.clusters), pointsize = 1, labelsize = 7)
+
+```
+
+### We can see from the displayed plot that cereals in Cluster 1 can be considered as healthy, since they contain a relatively higher contents of fiber and protein.
