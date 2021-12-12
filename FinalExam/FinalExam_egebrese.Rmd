@@ -1,0 +1,155 @@
+---
+title: 'Predicting Party Affiliation Based on Twitter Engagement Numbers'
+author: "Eyob Tadele"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+spacing: double
+---
+# Abstract
+
+Predicting political party affiliation from Twitter engagement numbers such as replies, re-tweets, and favorites is an interesting problem to explore. Through the application of clustering and logistic regression, we can gain insight into whether it is possible to make reliable predictions. Interpretations of the results indicates that K-means and glm are not particularly useful in predicting group affiliation.
+
+# Problem Definition
+
+Twitter is one of the foremost social media platforms across the world. It has become the primary source for information, entertainment, and communication. With its widespread user base and availability, shaping opinions and associating with groups based on various interests come naturally. This poses an interesting question on whether we can predict some kind of behavioral pattern or group to which users belong to by analyzing twitter use habits. 
+
+For this specific problem, the motivation is to find out whether Twitter accounts of US politicians (i.e. Senators, Presidents) and their engagement numbers can be useful in predicting their political party affiliations. The main engagement metrics applied here will be  reply, re-tweet, and favorite numbers.
+
+
+# Data
+
+The dataset to be used for this project was originally obtained from FiveThirtyEight website's github repository (https://github.com/fivethirtyeight/data/tree/master/twitter-ratio) and re-posted on Kaggle. It consists of tweets from US Senators, and two former Presidents between 2008 to 2017. Overall, it consists of over 290,000 rows of data with seven features. Namely, created_at, text tweeted, url, replies, re-tweets, favorites,and user. A label, which will be used as a predictive value has been added. A summary of these features and label are indicated below in [figure 1]. The main features that will be used for this project are number of replies, re-tweets, and favorites.
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+# load relevant libraries and explore data
+library(dplyr)
+library(tidyverse)
+library(factoextra)
+library(cluster)
+library(gridExtra)
+library(flexclust)
+library(caret)
+
+
+twtr <- read.csv("twitter_data_01.csv")
+# convert party feature to factor
+twtr$party <- as.factor(twtr$party)
+twtr1 <- twtr
+str(twtr1)
+twtr1 <- twtr1[,c(4,5,6,8)]
+```
+
+
+# Methodology
+
+The approach applied to tackle this problem is two-tiered. Initially, a logistic regression model is applied to the original twitter dataset as a baseline for performance comparison. Next, a K-means clustering algorithm is used to cluster the dataset into groups. The clustered data will then be used to predict 'party affiliation' using logistic regression. The added cluster will be used as an additional feature to the already existing ones. The assumption here is that, appending clusters will improve the predictive capability of the logistic regression model.
+
+The ease with which it can be implemented and its efficiency in training data makes logistic regression an ideal candidate for this problem. Additionally, it is very fast at classifying and can have a good accuracy for simple datasets. In reality however, there may not be linearity between the features and the label. The choice for K-means clustering is its ability to work well with large datasets and its simple application. Outlier data may be an issue of concern, as K-means can be sensitive to it.
+
+
+# Analysis 
+
+Initial import and observation of the dataset indicates there is a balanced distribution of the 'party' label and not heavily skewed to one end. It is indicated in [Figure 2] below. Here, the Democratic party is represented as 0, and Republicans as 1.
+```{r echo=FALSE}
+xtabs(~party,data = twtr1)
+```
+Features such as 'created_at', 'text', 'url', 'user', 'bioguide_id', and,  'state' were dropped since they have little to no use in predicting the label (dependent variable). Initially, a logistic regression model was created on a training set and applied it to a test set. The partition was done in a 70-30 split. Result of this initial model suggests an accuracy of about 56.28%. This will be used as a baseline to compare if the model accuracy can be improved by applying a layer of clustering. 
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+# creating testing and training set on the original dataset to apply a logistic 
+# regression model as a baseline for comparison
+set.seed(420)
+# Model for partitioning twtr dataset into training and test data (70-30 split)
+partModel <- createDataPartition(twtr1$party, p=0.7, list = FALSE)
+# Creating the training and test datasets by applying the model
+twTrain <- twtr1[partModel,]
+twTest <- twtr1[-partModel,]
+
+# create the logistic regression model
+glmModel <- glm(party ~ . , family = "binomial", data = twTrain, maxit = 100)
+summary(glmModel)
+# prediction on the training set
+predictTw <- predict(glmModel, twTrain, type = "response")
+# assigning cutoff values
+predictTw <- as.factor(ifelse(predictTw > 0.5,1,0))
+print(confusionMatrix(predictTw,twTrain$party))
+
+# prediction on the test set
+predictTwTest <- predict(glmModel, twTest, type = "response")
+# assigning cutoff values
+predictTwTest <- as.factor(ifelse(predictTwTest > 0.5,1,0))
+print(confusionMatrix(predictTwTest,twTest$party))
+```
+
+The next stage is to cluster the dataset using K-means clustering. This requires normalizing the continuous features (i.e. replies, re-tweets, and favorites). Using the silhouette method, we identify that k=2 is the optimal k for the dataset [Figure 3]. With the optimal k identified, applying a kmeans function results in a clustering that is lopsided, 1222 in cluster1 and  293832 in cluster2. This may potentially render the clustering uninformative as the features might be too close to each other and incorporating outliers. Cluster visualization is indicated below in [Figure 4].
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+set.seed(420)
+#twtr0 <- twtr[sample(nrow(twtr), 5000),]
+twtr.km <- twtr1[,c(1,2,3)]
+twtr.km <- scale(twtr.km) # scaling the dataset using z-score
+
+twtr.km2 <- twtr1[,c(1,2,3)]
+# sampling 10000 datasets to avoid vector memory exhaustion
+twtr.km2 <- twtr.km2[sample(nrow(twtr.km2), 10000),] 
+# applying the Silhouette method using the fviz_nbclust function
+fviz_nbclust(twtr.km2, kmeans, method = "silhouette")
+```
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+set.seed(420)
+k2 <- kmeans(twtr.km, centers = 2, nstart = 50)
+str(k2)
+table(k2$cluster)
+fviz_cluster(k2, data = twtr.km, pointsize = 1, labelsize = 7)
+```
+
+Cluster values are added to the dataset, thereby having reply, re-tweets, favorites, and cluster as the features for predicting party affiliation. As a result, re-running the logistic regression model on this transformed dataset may improve the model. Looking at the model created by using the training set and applied to the test set (still 70-30 split), there is only a very slight improvement in accuracy to about 56.44%. This indicates that the clustering layer applied did not have a major factor in improving predictive accuracy of the logistic regression model.  
+```{r include=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+#incorporating the clusters with the non selected features and append to dataset
+temp <- as.data.frame(list(k2$cluster))
+twtr1$cluster <- temp[,c(1)]
+twtr1$cluster <- as.factor(twtr1$cluster)
+twtr1[,5] <- as.numeric(as.character(twtr1[,5]))
+```
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+# LOGISTIC REGRESSION AFTER PERFORMING CLUSTERING
+set.seed(420)
+# Model for partitioning twtr dataset into training and test data (70-30 split)
+T_idx <- createDataPartition(twtr1$party, p=0.7, list = FALSE)
+# Creating the training and test datasets by applying the model
+Train_twitter <- twtr1[T_idx,]
+Test_twitter <- twtr1[-T_idx,]
+
+summary(Train_twitter)
+summary(Test_twitter)
+
+# create the logistic regression model
+Model_glm <- glm(party ~ . , family = "binomial", data = Train_twitter, maxit = 100)
+# prediction on the test set
+predictTestTwit <- predict(Model_glm, Test_twitter, type = "response")
+
+# assigning cutoff values
+preictedClasses <- as.factor(ifelse(predictTestTwit > 0.5,1,0))
+
+# generating a confusion matrix and related details from the predictions
+# made by the model
+print(confusionMatrix(preictedClasses,Test_twitter$party))
+```
+
+```{r echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+# displaying a graph of predicted probabilities along with actual party status
+predicted.data <- data.frame(probability.of.party=Model_glm$fitted.values, party=Train_twitter$party)
+ predicted.data <- predicted.data[order(predicted.data$probability.of.party, decreasing = FALSE),]
+ predicted.data$rank <- 1:nrow(predicted.data)
+ library(ggplot2)
+ library(cowplot)
+ ggplot(data=predicted.data, aes(x=rank, y=probability.of.party)) + geom_point(aes(color=party), alpha=1, shape=4, stroke=2) + xlab("Index") + ylab("Predicted prob of party")
+```
+
+# Conclusion 
+
+Predicting human behavioral patterns is often an uphill task, especially when it is hard to quantify. It can be inferred from the results of the models applied, both logistic regression and K-means clustering, engagement metrics such as replies, re-tweets, and favorites are not strong predictors of political party affiliation among elected officials. Even reducing the dimension of the features by dropping some variables does not lead to improvement of the predictive capability. It is also clear from the results that the the K-means clustering approach has not produced the expected level of result. This might be due to the dataset itself and how similar it is. It was only able to differentiate two clusters where one is significantly larger than the other and the second only include what appears to be outliers. In general, it is very difficult to predict human behavior that requires analytical and emotional reasoning. Twitter engagement metrics, especially for political content may significantly differ depending on which party is in power, the poll number, and the current hot issues. If there is a way to incorporate all that into the dataset, there is a potential to improve the predictive capability of the model. But there are no guarantees.
